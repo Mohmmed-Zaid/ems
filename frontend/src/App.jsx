@@ -1,145 +1,104 @@
-import { useState, useEffect } from 'react';
-import axios from 'axios';
+import React, { useState, useEffect } from 'react';
 import './App.css';
+
+const API_BASE_URL = 'http://localhost:8080/employees';
 
 function App() {
   const [employees, setEmployees] = useState([]);
-  const [formData, setFormData] = useState({
-    name: '',
-    phone: '',
-    email: '',
-    department: '',
-    salary: '',
-    hireDate: ''
-  });
-  const [editId, setEditId] = useState(null);
+  const [newEmployee, setNewEmployee] = useState({ name: '', phone: '', email: '', department: '', salary: '', hireDate: '' });
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [departmentFilter, setDepartmentFilter] = useState('');
+  const [searchTerm, setSearchTerm] = useState('');
 
   useEffect(() => {
     fetchEmployees();
   }, []);
 
   const fetchEmployees = async () => {
+    setLoading(true);
+    setError(null);
     try {
-      const response = await axios.get('http://localhost:8080/employees');
-      setEmployees(response.data);
-    } catch (error) {
-      console.error('Error fetching employees:', error);
+      const response = await fetch(API_BASE_URL);
+      if (!response.ok) throw new Error('Failed to fetch employees');
+      const data = await response.json();
+      setEmployees(data);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
     }
   };
 
   const handleInputChange = (e) => {
-    setFormData({ ...formData, [e.target.name]: e.target.value });
+    setNewEmployee({ ...newEmployee, [e.target.name]: e.target.value });
   };
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
+  const addEmployee = async () => {
     try {
-      if (editId) {
-        await axios.put(`http://localhost:8080/employees/${editId}`, formData);
-        setEditId(null);
-      } else {
-        await axios.post('http://localhost:8080/employees', formData);
-      }
-      setFormData({ name: '', phone: '', email: '', department: '', salary: '', hireDate: '' });
+      const response = await fetch(API_BASE_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newEmployee),
+      });
+      if (!response.ok) throw new Error('Failed to add employee');
       fetchEmployees();
-    } catch (error) {
-      console.error('Error saving employee:', error);
+      setNewEmployee({ name: '', phone: '', email: '', department: '', salary: '', hireDate: '' });
+    } catch (err) {
+      setError(err.message);
     }
   };
 
-  const handleEdit = (employee) => {
-    setEditId(employee.id);
-    setFormData(employee);
-  };
-
-  const handleDelete = async (id) => {
+  const deleteEmployee = async (id) => {
     try {
-      await axios.delete(`http://localhost:8080/employees/${id}`);
+      const response = await fetch(`${API_BASE_URL}/${id}`, {
+        method: 'DELETE',
+      });
+      if (!response.ok) throw new Error('Failed to delete employee');
       fetchEmployees();
-    } catch (error) {
-      console.error('Error deleting employee:', error);
+    } catch (err) {
+      setError(err.message);
     }
   };
+
+  const filteredEmployees = employees.filter((employee) => {
+    const departmentMatch = departmentFilter ? employee.department.toLowerCase().includes(departmentFilter.toLowerCase()) : true;
+    const searchMatch = searchTerm ? employee.name.toLowerCase().includes(searchTerm.toLowerCase()) || employee.email.toLowerCase().includes(searchTerm.toLowerCase()) : true;
+    return departmentMatch && searchMatch;
+  });
+
+  if (loading) return <div>Loading...</div>;
+  if (error) return <div>Error: {error}</div>;
 
   return (
     <div className="App">
       <h1>Employee Management System</h1>
-      <form onSubmit={handleSubmit}>
-        <input
-          name="name"
-          value={formData.name}
-          onChange={handleInputChange}
-          placeholder="Name"
-          required
-        />
-        <input
-          name="phone"
-          value={formData.phone}
-          onChange={handleInputChange}
-          placeholder="Phone"
-          required
-        />
-        <input
-          name="email"
-          value={formData.email}
-          onChange={handleInputChange}
-          placeholder="Email"
-          required
-        />
-        <input
-          name="department"
-          value={formData.department}
-          onChange={handleInputChange}
-          placeholder="Department"
-        />
-        <input
-          name="salary"
-          type="number"
-          value={formData.salary}
-          onChange={handleInputChange}
-          placeholder="Salary"
-        />
-        <input
-          name="hireDate"
-          value={formData.hireDate}
-          onChange={handleInputChange}
-          placeholder="Hire Date (YYYY-MM-DD)"
-        />
-        <button type="submit">{editId ? 'Update' : 'Add'} Employee</button>
-      </form>
-
-      <h2>Employee List</h2>
-      <table>
-        <thead>
-          <tr>
-            <th>ID</th>
-            <th>Name</th>
-            <th>Phone</th>
-            <th>Email</th>
-            <th>Department</th>
-            <th>Salary</th>
-            <th>Hire Date</th>
-            <th>Actions</th>
-          </tr>
-        </thead>
-        <tbody>
-          {employees.map((emp) => (
-            <tr key={emp.id}>
-              <td>{emp.id}</td>
-              <td>{emp.name}</td>
-              <td>{emp.phone}</td>
-              <td>{emp.email}</td>
-              <td>{emp.department}</td>
-              <td>{emp.salary}</td>
-              <td>{emp.hireDate}</td>
-              <td>
-                <button onClick={() => handleEdit(emp)}>Edit</button>
-                <button onClick={() => handleDelete(emp.id)}>Delete</button>
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+      <div className="search-filter-container">
+        <input type="text" placeholder="Search by name or email" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
+        <input type="text" placeholder="Filter by department" value={departmentFilter} onChange={(e) => setDepartmentFilter(e.target.value)} />
+      </div>
+      <div className="add-employee-form">
+        <input name="name" placeholder="Name" value={newEmployee.name} onChange={handleInputChange} />
+        <input name="phone" placeholder="Phone" value={newEmployee.phone} onChange={handleInputChange} />
+        <input name="email" placeholder="Email" value={newEmployee.email} onChange={handleInputChange} />
+        <input name="department" placeholder="Department" value={newEmployee.department} onChange={handleInputChange} />
+        <input name="salary" placeholder="Salary" value={newEmployee.salary} onChange={handleInputChange} />
+        <input name="hireDate" placeholder="Hire Date" type="date" value={newEmployee.hireDate} onChange={handleInputChange} />
+        <button onClick={addEmployee}>Add Employee</button>
+      </div>
+      <div className="employee-list">
+        {filteredEmployees.map((employee) => (
+          <div key={employee.id} className="employee-card">
+            <h3>{employee.name}</h3>
+            <p>Email: {employee.email}</p>
+            <p>Phone: {employee.phone}</p>
+            <p>Department: {employee.department}</p>
+            <p>Salary: {employee.salary}</p>
+            <p>Hire Date: {employee.hireDate}</p>
+            <button onClick={() => deleteEmployee(employee.id)}>Delete</button>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
